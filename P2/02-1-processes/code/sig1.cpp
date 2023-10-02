@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
-
 #define NTIMES 30
 
 int main(void)
