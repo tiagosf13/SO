@@ -1,0 +1,20 @@
+CXX = g++
+CXXFLAGS = -Wall -Wfatal-errors -ggdb -pthread
+
+TARGETS = main, ex2
+
+.PHONY:	clean cleanall
+
+all: $(TARGETS)
+
+main: main.o utils.o
+	$(CXX) -o $@ $^ $(CXXFLAGS)
+
+ex2: ex2.o utils.o
+	$(CXX) -o $@ $^ $(CXXFLAGS)
+
+clean:
+	rm -f *.o
+
+cleanall:	clean
+	rm -f $(TARGETS) 
