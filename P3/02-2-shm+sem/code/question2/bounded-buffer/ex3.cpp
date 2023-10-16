@@ -36,38 +36,33 @@ int main(void)
     }
     
 
-
     pid_t pid1 = pfork();
+
     if (pid1 == 0)
     {
-        exit(0);
-    }
-    pid_t pid2 = pfork();
-   if (pid2 == 0)
-    {
-        exit(0);
-    }
- 
-    printf("PID1 %d - PID2 %d\n", pid1, pid2);
-    pwait(NULL);
-    pwait(NULL);
-    exit(0);
-
-    while( *pcounter < input_number) //se for <=n, um dos processos fica bloqueado
-    {
-        if ((*pcounter)%2 == EVEN)
+        while(*pcounter < input_number)
         {
             psem_down(sems, EVEN);
             printf("(%d) %d\n", pid1, (*pcounter)++);
             psem_up(sems, ODD);
-            //printf("COUNTER %d - PID %d\n", *pcounter, pid);
         }
-        else
+    }
+    pid_t pid2 = pfork();
+    if (pid2 == 0)
+    {
+        while(*pcounter < input_number)
         {
             psem_down(sems, ODD);
             printf("(%d) %d\n", pid1, (*pcounter)++);
             psem_up(sems, EVEN);
         }
     }
+
+    if(!(pid1 == 0 || pid2 ==0))
+    {
+        pwait(NULL);
+        pwait(NULL);
+    }
+
     return EXIT_SUCCESS;
 }
