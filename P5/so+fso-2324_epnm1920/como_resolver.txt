@@ -1,0 +1,55 @@
+Considerações:
+	Temos de garantir que as operações são atómicas, fazer lock/down antes de aceder, e fazer unlock/up depois de executar todas as operações
+	
+	Threads - Mutex (lock, unlock):
+
+		para cada variável partilhada, usar um mutex (para proteger a variável partilhada)
+		
+		lock
+
+			while(condition)
+				wait
+			operações
+		unlock
+
+	Processos - Semaforo (down, up):
+		
+		para cada condição de acesso, usar um semáforo (Ex: par e impar, usar um semaforo par e outro impar)
+
+	Para variáveis fora de funções (usar o static):
+	
+		static nome_variavel;
+
+	Ter cuidado com a alocação da memória, verificar se no código do teste a memória é partilhada
+
+(1) Entidades Ativas (EA)
+	
+	patient, nurse, doctor
+
+(2) Comunicação entre Entidades Ativas (EA)
+
+	- Partilha de memória (no pdf é partida de uma fila, no código é a pfifo)
+		
+	- Comunicação Direta (doctor --> patient) (feita atraves da variavel "done" [cada paciente tem uma variavel done])
+
+
+
+Ordem de Implementação
+
+
+	(a) Módulo Partilhado
+		
+		pfifo (retrieve, insert, full, empty)
+
+	(b) Lançar Entidades Ativas (EA)
+
+		Fazer o código que lançar os processos (pfork) ou as threads (pthread_create) (criar as próprias funções, não alterar as que já la estão)
+
+
+	(c) Comunicação Direta entre Entidades Ativas (EA)
+
+		Partilha de memória entre as Entidades Ativas
+
+	(d) Terminação
+
+		Terminar o programa a avisar as Entidades Ativas
