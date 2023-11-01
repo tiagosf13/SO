@@ -5,7 +5,7 @@
 
 #define FIFO_ACCESS 0
 #define FIFO_SLOTS_AVAILABLE 1
-#define FIFO_EMPTY 2
+#define ITEMS 2
 
 static void print_pfifo(PriorityFIFO* pfifo);
 static int empty_pfifo(PriorityFIFO* pfifo);
@@ -39,11 +39,8 @@ void term_pfifo(PriorityFIFO* pfifo)
 {
    require (pfifo != NULL, "NULL pointer to FIFO");  // a false value indicates a program error
 
-   // Destory the semaphores
-
+   // Destory the 3 semaphores
    psemctl(pfifo->sem_id, FIFO_ACCESS, IPC_RMID, NULL);
-   psemctl(pfifo->sem_id, FIFO_SLOTS_AVAILABLE, IPC_RMID, NULL);
-   psemctl(pfifo->sem_id, FIFO_EMPTY, IPC_RMID, NULL);
 }
 
 /* --------------------------------------- */
@@ -52,9 +49,10 @@ void term_pfifo(PriorityFIFO* pfifo)
 void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
 {
    require (pfifo != NULL, "NULL pointer to FIFO");  // a false value indicates a program error
-   
-   //decrement the semaphore
-   psem_down(pfifo->sem_id, 0);
+   // Decrement the Slots available (Reserve)
+   psem_down(pfifo->sem_id, FIFO_SLOTS_AVAILABLE);
+   //Lock the access to the FIFO
+   psem_down(pfifo->sem_id, FIFO_ACCESS);
 
    require ((id >= 0 && id <= MAX_ID) || id == DUMMY_ID, "invalid id");  // a false value indicates a program error
    require (priority > 0 && priority <= MAX_PRIORITY, "invalid priority value");  // a false value indicates a program error
@@ -91,8 +89,11 @@ void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
    pfifo->cnt++;
    //printf("[insert_pfifo] pfifo->inp=%d, pfifo->out=%d\n", pfifo->inp, pfifo->out);
 
-   // UP the semaphore
-   psem_up(pfifo->sem_id, 0);
+   // Unlock the access to the FIFO
+   psem_up(pfifo->sem_id, FIFO_ACCESS);
+
+   // Increment the slots occupied
+   psem_up(pfifo->sem_id, ITEMS);
 }
 
 /* --------------------------------------- */
@@ -101,7 +102,13 @@ void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
 int retrieve_pfifo(PriorityFIFO* pfifo)
 {
    require (pfifo != NULL, "NULL pointer to FIFO");   // a false value indicates a program error
+   // Decrement the slots occupied (Reserve)
+   psem_down(pfifo->sem_id, ITEMS);
+   // Lock the FIFO access
+   psem_down(pfifo->sem_id, FIFO_ACCESS);
+
    require (!empty_pfifo(pfifo), "empty FIFO");       // IMPORTANT: in a shared fifo, it may not result from a program error!
+
 
    check_valid_patient_id(pfifo->array[pfifo->out].id);
    check_valid_priority(pfifo->array[pfifo->out].priority);
@@ -122,7 +129,11 @@ int retrieve_pfifo(PriorityFIFO* pfifo)
    }
 
    ensure ((result >= 0 && result <= MAX_ID) || result == DUMMY_ID, "invalid id");  // a false value indicates a program error
-
+   // Unlock the FIFO access
+   psem_up(pfifo->sem_id, FIFO_ACCESS);
+   // Increment the Slots available
+   psem_up(pfifo->sem_id, FIFO_SLOTS_AVAILABLE);
+   
    return result;
 }
 
