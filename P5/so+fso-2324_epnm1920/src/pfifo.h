@@ -21,7 +21,11 @@
 
 // TODO point: uncomment the desired implementation
 //#include "thread.h"
-//#include "process.h"
+#include "process.h"
+
+/* Changes made:
+   - typedef struct PriorityFIFO
+*/
 
 typedef struct
 {
@@ -35,7 +39,7 @@ typedef struct
    int cnt;  ///< number of items stored
    // TODO point: if necessary, add synchronization declarations here
 
-   // Adding a semaphore to the FIFO
+   // Adding a Semaphores ID for th FIFO (To sync it)
    int sem_id;
 
 } PriorityFIFO;

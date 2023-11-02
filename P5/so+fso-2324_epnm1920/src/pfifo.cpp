@@ -5,21 +5,40 @@
 
 #define FIFO_ACCESS 0
 #define FIFO_SLOTS_AVAILABLE 1
-#define ITEMS 2
+#define FIFO_ITEMS 2
 
 static void print_pfifo(PriorityFIFO* pfifo);
 static int empty_pfifo(PriorityFIFO* pfifo);
 static int full_pfifo(PriorityFIFO* pfifo);
 
+
+/* Changes made:
+   - void init_pfifo(PriorityFIFO* pfifo)
+   - void term_pfifo(PriorityFIFO* pfifo)
+   - void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
+   - int retrieve_pfifo(PriorityFIFO* pfifo)
+*/
+
 // TODO point: initialization changes may be required in this function
 void init_pfifo(PriorityFIFO* pfifo)
 {
+   /* When initiating the Data Structure, I added the code to:
+         1. Created 3 Semaphores:
+            - FIFO_ACCESS : To manage the access to the FIFO, so that we are the access to it is exclusive
+            - FIFO_SLOTS_AVAILABLE : To indicate how many slots are free in the FIFO
+            - FIFO_ITEMS : To indicate how many items there is in the FIFO
+         
+         2. Incremented the Semaphores:
+            - FIFO_SLOTS_AVAILABLE : To the size of the FIFO (in the begining all slots are available)
+            - FIFO_ACCESS : So that when starting the FIFO we can get access to it
+    */
+
    require (pfifo != NULL, "NULL pointer to FIFO");  // a false value indicates a program error
 
    // Create the 3 Semaphores
    pfifo->sem_id = psemget(IPC_PRIVATE, 3, 0600 | IPC_CREAT | IPC_EXCL); // 3 Semaphores
 
-   // Set the semaphore FIFO_ITEMS to FIFO_MAXSIZE
+   // Set the semaphore FIFO_FIFO_ITEMS to FIFO_MAXSIZE
    for (int i=0; i<FIFO_MAXSIZE; i++)
    {
       psem_up(pfifo->sem_id, FIFO_SLOTS_AVAILABLE);
@@ -37,6 +56,10 @@ void init_pfifo(PriorityFIFO* pfifo)
 // TODO point: termination changes may be required in this function
 void term_pfifo(PriorityFIFO* pfifo)
 {
+   /* When terminating the Data Structure, we added the code to:
+         1. Destroyed the 3 Semaphores (passing as a argument the FIFO_ACCESS)
+    */
+
    require (pfifo != NULL, "NULL pointer to FIFO");  // a false value indicates a program error
 
    // Destory the 3 semaphores
@@ -48,6 +71,15 @@ void term_pfifo(PriorityFIFO* pfifo)
 // TODO point: synchronization changes may be required in this function
 void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
 {
+   /* When inserting into the Data Structure, we added the code to:
+         1. Decrement the Semaphores:
+            - FIFO_SLOTS_AVAILABLE : To reserve a space in the FIFO so that we have one garanteed
+            - FIFO_ACCESS : Lock the acess to the FIFO, so that we are the only ones operating on it
+         2. After all the operations in the FIFO, we Increment the Semaphores:
+            - FIFO_ACCESS : Unlock the acess to the FIFO, so that others can access it
+            - FIFO_ITEMS : To register that there is one more item in the FIFO
+    */
+   
    require (pfifo != NULL, "NULL pointer to FIFO");  // a false value indicates a program error
    // Decrement the Slots available (Reserve)
    psem_down(pfifo->sem_id, FIFO_SLOTS_AVAILABLE);
@@ -57,9 +89,6 @@ void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
    require ((id >= 0 && id <= MAX_ID) || id == DUMMY_ID, "invalid id");  // a false value indicates a program error
    require (priority > 0 && priority <= MAX_PRIORITY, "invalid priority value");  // a false value indicates a program error
    require (!full_pfifo(pfifo), "full FIFO");  // IMPORTANT: in a shared fifo, it may not result from a program error!
-
-   
-
 
    // Nota Minha
    // Depois da linha 32, fazer o lock do mutex da fifo
@@ -93,7 +122,7 @@ void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
    psem_up(pfifo->sem_id, FIFO_ACCESS);
 
    // Increment the slots occupied
-   psem_up(pfifo->sem_id, ITEMS);
+   psem_up(pfifo->sem_id, FIFO_ITEMS);
 }
 
 /* --------------------------------------- */
@@ -101,9 +130,18 @@ void insert_pfifo(PriorityFIFO* pfifo, int id, int priority)
 // TODO point: synchronization changes may be required in this function
 int retrieve_pfifo(PriorityFIFO* pfifo)
 {
+   /* When retrieving from the Data Strutucre, we added the code to:
+         1. Decrement the Semaphores:
+            - FIFO_ITEMS : To reserve the next item on the FIFO as ours
+            - FIFO_ACCESS : Lock the acess to the FIFO, so that we are the only ones operating on it
+         2. After all the operations in the FIFO, we Increment the Semaphores:
+            - FIFO_ACCESS : Unlock the acess to the FIFO, so that others can access it
+            - FIFO_SLOTS_AVAILABLE : To indicate that there is one more slot available
+    */
+
    require (pfifo != NULL, "NULL pointer to FIFO");   // a false value indicates a program error
    // Decrement the slots occupied (Reserve)
-   psem_down(pfifo->sem_id, ITEMS);
+   psem_down(pfifo->sem_id, FIFO_ITEMS);
    // Lock the FIFO access
    psem_down(pfifo->sem_id, FIFO_ACCESS);
 

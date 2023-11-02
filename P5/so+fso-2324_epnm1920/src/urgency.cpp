@@ -22,6 +22,15 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+/* Changes made:
+   - int main(int argc, char *argv[])
+   - Added Module variables (Shared Memory ID, Patients Semaphores ID)
+   - void term_simulation(int np)
+   - int doctor_iteration(int id)
+   - void patient_wait_end_of_consultation(int id)
+   - void patient_life(int id)
+*/
+
 /* DO NOT CHANGE THE FOLLOWING VALUES, run program with option -h to set a different values */
 
 static int npatients = 4;  ///< number of patients
@@ -65,8 +74,8 @@ typedef struct
 HospitalData * hd = NULL;
 
 // TODO point: if necessary, add module variables here
-static int shmid;
-static int patients_sems;  // a integer that leads to the patients_sems
+static int shmid; // Shared Memory ID
+static int patients_sems;  // The Patients Semaphores ID (for keeping the Patients until the end of consultation)
 
 
 /**
@@ -86,16 +95,23 @@ void random_wait();
 // TODO point: changes may be required to this function
 void init_simulation(int np)
 {
+   /* When initiating the Simulation, I added the code to:
+         1. Created np (Number of Patients) Semaphores to know when to discharge Patients from the consultation
+         2. Created and Atached the HospitalData as Shared Memory, so that the processes access the same information
+    */
+
    printf("Initializing simulation\n");
-   //hd = (HospitalData*)mem_alloc(sizeof(HospitalData)); // mem_alloc is a malloc with NULL pointer verification
+
+   // mem_alloc is a malloc with NULL pointer verification
+   //hd = (HospitalData*)mem_alloc(sizeof(HospitalData));
    
-   // Create np Semaphores
+   // Create np Semaphores (one for each Patient, to control who is good to go)
    patients_sems = psemget(IPC_PRIVATE, np, 0600 | IPC_CREAT | IPC_EXCL); // np Semaphores
 
    // Shared Memory Creation
    shmid = pshmget(IPC_PRIVATE, sizeof(HospitalData), 0600 | IPC_CREAT | IPC_EXCL);
 
-   // attach shm to pointer address:
+   // Attach shm to pointer address:
    hd = (HospitalData*)pshmat(shmid, NULL, 0);
 
    memset(hd, 0, sizeof(HospitalData));
@@ -109,15 +125,22 @@ void init_simulation(int np)
 
 // TODO point: changes may be required to this function
 void term_simulation(int np) {
+   /* When terminating the Simulation, I added the code to:
+         1. Detach the Shared Memory
+         2. Destroy the Shared Memory
+    */
+
    // DO NOT WAIT THE TERMINATION OF ACTIVE ENTITIES IN THIS FUNCTION!
    // This function is just to release the allocated resources
    
    printf("Releasing resources\n");
    term_pfifo(&hd->doctor_queue);
    term_pfifo(&hd->triage_queue);
-   free(hd);
+   //free(hd); as we dont use memalloc, we dont need to use free, we used pshmget and pshmat so we use pshmctl
+
    // Detach Shared Memory
    pshmdt((void*)hd);
+   
    // Destroy Shared Memory
    pshmctl(shmid, IPC_RMID, NULL);
    hd = NULL;
@@ -146,6 +169,11 @@ int nurse_iteration(int id) // return value can be used to request termination
 // TODO point: changes may be required to this function
 int doctor_iteration(int id) // return value can be used to request termination
 {
+   /* When the Doctor is working, I added the code to:
+         1. When the Doctor ended treating the Patient, mark the Patient has Done.
+         2. Increment the Patients Semaphore, so that the Patient knows when to leave.
+    */
+
    check_valid_doctor(id);
    printf("\e[32;01mDoctor %d: get next patient\e[0m\n", id);
    int patient = retrieve_pfifo(&hd->doctor_queue);
@@ -156,7 +184,11 @@ int doctor_iteration(int id) // return value can be used to request termination
    random_wait();
    printf("\e[32;01mDoctor %d: patient %d treated\e[0m\n", id, patient);
    // TODO point: PUT YOUR PATIENT CONSULTATION FINISHED NOTIFICATION CODE HERE:
+
+   // Mark the Patient has done so that it can be discharged
    hd->all_patients[patient].done = 1;
+
+   // Increment the Patients Semaphore so that he knows he can leave the Hospital
    psem_up(patients_sems, patient);
 
    // Nota Minha
@@ -182,10 +214,15 @@ void patient_goto_urgency(int id)
 // TODO point: changes may be required to this function
 void patient_wait_end_of_consultation(int id)
 {
+   /* When the Doctor is working, I added the code to:
+         1. Decremented the Patients Semaphore so that he knows he is in a consultation and he can only 
+            leave when the Doctor says so (the Doctor will increment the same when good to go)
+    */
+
    check_valid_name(hd->all_patients[id].name);
    // TODO point: PUT YOUR WAIT CODE FOR FINISHED CONSULTATION HERE:
    
-   //Decrement the patient sem to indicate he is done
+   //Decrement the patient sem to indicate he is in a consultation
    psem_down(patients_sems, id);
    
    printf("\e[30;01mPatient %s (number %d): health problems treated\e[0m\n", hd->all_patients[id].name, id);
@@ -194,6 +231,10 @@ void patient_wait_end_of_consultation(int id)
 // TODO point: changes are required to this function
 void patient_life(int id)
 {
+   /* When the Doctor is working, I added the code to:
+         1. Commented the dummy code
+    */
+   
    patient_goto_urgency(id);
    //nurse_iteration(0);  // TODO point: to be commented/deleted in concurrent version
    //doctor_iteration(0); // TODO point: to be commented/deleted in concurrent version
@@ -209,6 +250,15 @@ void patient_life(int id)
 
 int main(int argc, char *argv[])
 {
+   /*
+      When starting the program, I changed the code to:
+         1. Commented the dummy code so that we can test it with ours
+         2. Created the Active Entities
+         3. Waited for all the patients, nurses and doctors processes to end
+         4. Modified:
+            - init_simulation(npatients) : In order to create the necessary structures to run the simulation
+            - term_simulation(npatients) : To end the simulation with control and to prevent memory leaks
+    */
    /* command line processing */
    int option;
    while ((option = getopt(argc, argv, "p:n:d:h")) != -1)
@@ -257,6 +307,7 @@ int main(int argc, char *argv[])
 
    // TODO point: REPLACE THE FOLLOWING DUMMY CODE WITH code to launch
    // active entities and code to properly terminate the simulation.
+
    /* dummy code to show a very simple sequential behavior */
 
    /* for(int i = 0; i < npatients; i++)
@@ -267,29 +318,15 @@ int main(int argc, char *argv[])
    } */
    /* end of dummy code */
 
-   /* terminate simulation */
-
-   // Create the Acti
+   // Create the Active Entities
    for(int i = 0; i < npatients; i++)
    {
       pid_t p = pfork();
-      if (p == 0) // child process
+      if (p == 0) // Child process
       {
          patient_life(i);
-         exit(0);
-      }
-   }
 
-   for(int i = 0; i < ndoctors; i++)
-   {
-      pid_t p = pfork();
-      if (p == 0) // child process
-      {
-         while (hd->doctor_queue.cnt != 0 || hd->triage_queue.cnt != 0)
-         {
-            doctor_iteration(i);
-         }
-
+         // When the patient was processed and treated, we end his life to indicate is good to go
          exit(0);
       }
    }
@@ -297,7 +334,7 @@ int main(int argc, char *argv[])
    for(int i = 0; i < nnurses; i++)
    {
       pid_t p = pfork();
-      if (p == 0) // child process
+      if (p == 0) // Child process
       {
          while (hd->triage_queue.cnt != 0)
          {
@@ -307,11 +344,39 @@ int main(int argc, char *argv[])
       }
    }
 
+   for(int i = 0; i < ndoctors; i++)
+   {
+      pid_t p = pfork();
+      if (p == 0) // Child process
+      {
+         while (hd->doctor_queue.cnt != 0)
+         {
+            doctor_iteration(i);
+         }  
+         // We only terminate the doctors when there are no more patients in the doctor
+         exit(0);
+      }
+   }
+
+   // Wait for Patients processes to end
    for(int i = 0; i < npatients; i++)
    {
       pwait(NULL);
    }
 
+   // Wait for Nurses processes to end
+   for(int i = 0; i < nnurses; i++)
+   {
+      pwait(NULL);
+   }
+
+   // Wait for Doctors processes to end 
+   for(int i = 0; i < ndoctors; i++)
+   {
+      pwait(NULL);
+   }
+
+   /* terminate simulation */
    term_simulation(npatients);
    
    return EXIT_SUCCESS;
